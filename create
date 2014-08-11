@@ -1,5 +1,3 @@
-> createdb copsandrobbers
-
 REVOKE CONNECT ON DATABASE copsandrobbers FROM PUBLIC
 
 CREATE TABLE BANKS (
@@ -45,11 +43,12 @@ CREATE TABLE SKILLS (
 CREATE TABLE HasSkills (
   RobberId INT NOT NULL,
   SkillId INT NOT NULL,
-  Preference INT NOT NULL UNIQUE CONSTRAINT prefbetween CHECK (Preference BETWEEN 1 AND 3),
+  Preference INT NOT NULL CONSTRAINT prefbetween CHECK (Preference BETWEEN 1 AND 3),
   Grade CHAR(2) NOT NULL CONSTRAINT grdc CHECK (Grade IN ('A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C')),
   CONSTRAINT hspk PRIMARY KEY (RobberId, SkillId),
   CONSTRAINT hsrobberfk FOREIGN KEY (RobberId) REFERENCES robbers(RobberId) ON DELETE CASCADE,
-  CONSTRAINT hsskillfk FOREIGN KEY (SkillId) REFERENCES skills(SkillId) ON DELETE CASCADE
+  CONSTRAINT hsskillfk FOREIGN KEY (SkillId) REFERENCES skills(SkillId) ON DELETE CASCADE,
+  UNIQUE (RobberId, Preference)
 );
 
 CREATE TABLE HasAccounts (
@@ -76,18 +75,11 @@ CREATE TABLE Accomplices (
 \copy plans from plans_14.data
 
 
-
-##################
-Load in robbers
-##################
-
 CREATE TABLE temprobbers (
   Nickname CHAR(128) NOT NULL,
   Age INT NOT NULL,
   NoYears INT NOT NULL CONSTRAINT prisonyears CHECK(NoYears < Age AND NoYears >= 0)
 );
-
--> CREATE TABLE
 
 \copy temprobbers from robbers_14.data
 
@@ -95,16 +87,8 @@ INSERT INTO robbers (
   SELECT nextval('robbers_robberid_seq'), * FROM temprobbers
 );
 
--> INSERT 0 24
-
 DROP TABLE temprobbers;
 
-(Robbers table populated)
-
-
-===================
-Loading in skills
-===================
 
 CREATE TABLE tempskills (
   Nickname CHAR(64) NOT NULL,
@@ -123,23 +107,14 @@ INSERT INTO skills (
 
 DROP VIEW distinctskills;
 
--> INSERT 0 12
-
-(Skills populated with distinct skills)
-
 INSERT INTO hasskills (
   SELECT r.robberid, s.skillid, t.preference, t.grade FROM robbers r, skills s, tempskills t
   WHERE t.nickname = r.nickname AND t.skillname = s.description
 );
 
--> INSERT 0 38
-(Has skills populated with robber ids/skill ids)
 
 DROP TABLE tempskills;
 
-=========================================
-Load has accounts
-=========================================
 
 CREATE TABLE tempaccounts (
   Nickname CHAR(64) NOT NULL,
@@ -154,13 +129,8 @@ INSERT INTO hasaccounts (
   WHERE t.nickname = r.nickname
 );
 
--> INSERT 0 31
 
 DROP TABLE tempaccounts;
-
-========================================
-Load accomplices
-========================================
 
 CREATE TABLE tempaccomplices (
   Nickname CHAR(64) NOT NULL,
@@ -176,65 +146,15 @@ INSERT INTO accomplices (
   SELECT r.robberid, t.bankname, t.city, t.robberydate, t.share FROM robbers r, tempaccomplices t WHERE t.nickname = r.nickname
 );
 
--> Insert 0 76
-(Had to add a line to robberies file because it was missing a robbery.)
 
 DROP TABLE tempaccomplices;
 
-====================
-PART 3
-====================
 
-1a. INSERT INTO banks VALUES('Loanshark Bank', 'Evanston', 100, 'very good');
-    ERROR:  duplicate key value violates unique constraint "bpk"
-    DETAIL:  Key (bankname, city)=(Loanshark Bank                  , Evanston                        ) already exists.
-
-    There already exists a 'Loanshark Bank' in Evanston.
-
-1b. INSERT INTO banks VALUES('EasyLoan Bank', 'Evanston', -5, 'excellent');
-    ERROR:  new row for relation "banks" violates check constraint "atleastzero"
-
-    A bank can't have less than 0 accounts.
-
-1c. INSERT INTO banks VALUES('EasyLoan Bank', 'Evanston', 100, 'poor');
-    ERROR:  new row for relation "banks" violates check constraint "checksecurity"
-
-    'poor' is not a valid choice for security.
-
-2a. INSERT INTO skills VALUES(20, 'Guarding');
-    ERROR:  duplicate key value violates unique constraint "skills_description_key"
-    DETAIL:  Key (description)=(Guarding) already exists.
-
-3a. INSERT INTO robbers VALUES(1, 'Shotgun', 70, 0);
-    ERROR:  duplicate key value violates unique constraint "robbers_pkey"
-    DETAIL:  Key (robberid)=(1) already exists.
-
-    Already have a robber with ID 1
-
-3b. INSERT INTO robbers VALUES(333, 'Jail Mouse', 25, 35);
-    ERROR:  new row for relation "robbers" violates check constraint "prisonyears"
-
-    Can't be in prison longer than you have been alive
-
-4a. INSERT INTO hasskills VALUES(333, 1, 1, 'B-');
-    ERROR:  insert or update on table "hasskills" violates foreign key constraint "hsrobberfk"
-    DETAIL:  Key (robberid)=(333) is not present in table "robbers".
-
-    Foreign key requires robber exists with robberid 333, but it doesn't.
-
-4b. INSERT INTO hasskills VALUES(3,20,3,'B+');
-    ERROR:  insert or update on table "hasskills" violates foreign key constraint "hsskillfk"
-    DETAIL:  Key (skillid)=(20) is not present in table "skills".
-
-    Foreign key requires there to be a skill with skillid of 20, but there isn't one.
-
-4c. INSERT INTO hasskills VALUES(1,7,1,'A+');
-    ERROR:  duplicate key value violates unique constraint "hasskills_robberid_preference_key"
-    DETAIL:  Key (robberid, preference)=(1, 1) already exists.
-
-    There is a unique constraint on robberid and preference, because robbers should only be able to have a preference of 1,2,3 once each.
-
-4d. INSERT INTO hasskills VALUES(1,2,0,'A');
-    ERROR:  new row for relation "hasskills" violates check constraint "prefbetween"
-
-    prefbetween constraint checks that preference is between 1 and 3.
+DROP TABLE accomplices;
+DROP TABLE banks cascade;
+DROP TABLE hasaccounts;
+DROP TABLE hasskills;
+DROP TABLE plans;
+DROP TABLE robberies;
+DROP TABLE robbers cascade;
+DROP TABLE skills;
