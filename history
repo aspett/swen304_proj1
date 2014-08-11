@@ -3,33 +3,177 @@
 REVOKE CONNECT ON DATABASE copsandrobbers FROM PUBLIC
 
 CREATE TABLE BANKS (
-  BankName CHAR(128) NOT NULL,
-  City CHAR(128) NOT NULL,
-  NoAccounts INT NOT NULL DEFAULT 0,
+  BankName CHAR(32) NOT NULL,
+  City CHAR(32) NOT NULL,
+  NoAccounts INT NOT NULL DEFAULT 0
+                      CONSTRAINT atleastzero CHECK(NoAccounts >= 0),
   Security CHAR(12) NOT NULL,
   CONSTRAINT bpk PRIMARY KEY (BankName, City)
 );
 
 CREATE TABLE ROBBERIES (
-  BankName CHAR(128) NOT NULL,
-  City CHAR(128) NOT NULL,
+  BankName CHAR(32) NOT NULL,
+  City CHAR(32) NOT NULL,
   Date DATE NOT NULL,
-  Amount NUMERIC(6, 2) NOT NULL,
-  CONSTRAINT rbpk PRIMARY KEY (BankName, City)
+  Amount NUMERIC(20, 2) NOT NULL,
+  CONSTRAINT rbpk PRIMARY KEY (BankName, City, Date),
+  CONSTRAINT rfk FOREIGN KEY (BankName, City) REFERENCES banks(BankName, City) ON DELETE CASCADE
 );
 
 CREATE TABLE PLANS (
-  BankName CHAR(128) NOT NULL,
-  City CHAR(128) NOT NULL,
-  NoRobbers INT NOT NULL DEFAULT 0,
+  BankName CHAR(32) NOT NULL,
+  City CHAR(32) NOT NULL,
   PlannedDate DATE NOT NULL,
-  CONSTRAINT ppk PRIMARY KEY (BankName, City, PlannedDate)
+  NoRobbers INT NOT NULL DEFAULT 0,
+  CONSTRAINT ppk PRIMARY KEY (BankName, City, PlannedDate),
+  CONSTRAINT pfk FOREIGN KEY (BankName, City) REFERENCES banks(BankName, City) ON DELETE CASCADE
 );
 
 CREATE TABLE ROBBERS (
-  RobberId INT PRIMARY KEY,
+  RobberId SERIAL PRIMARY KEY,
+  Nickname CHAR(64) NOT NULL,
+  Age INT NOT NULL,
+  NoYears INT NOT NULL CONSTRAINT prisonyears CHECK(NoYears < Age AND NoYears >= 0)
+);
+
+CREATE TABLE SKILLS (
+  SkillId SERIAL PRIMARY KEY,
+  Description TEXT
+);
+
+CREATE TABLE HasSkills (
+  RobberId INT NOT NULL,
+  SkillId INT NOT NULL,
+  Preference INT NOT NULL,
+  Grade CHAR(2) NOT NULL CONSTRAINT grdc CHECK (Grade IN ('A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C')),
+  CONSTRAINT hspk PRIMARY KEY (RobberId, SkillId),
+  CONSTRAINT hsrobberfk FOREIGN KEY (RobberId) REFERENCES robbers(RobberId) ON DELETE CASCADE,
+  CONSTRAINT hsskillfk FOREIGN KEY (SkillId) REFERENCES skills(SkillId) ON DELETE CASCADE
+);
+
+CREATE TABLE HasAccounts (
+  RobberId INT NOT NULL,
+  BankName CHAR(32) NOT NULL,
+  City CHAR(32) NOT NULL,
+  CONSTRAINT hafk FOREIGN KEY (BankName, City) REFERENCES banks(BankName, City) ON DELETE CASCADE
+);
+
+CREATE TABLE Accomplices (
+  RobberId INT NOT NULL,
+  BankName CHAR(32) NOT NULL,
+  City CHAR(32) NOT NULL,
+  RobberyDate DATE NOT NULL,
+  Share NUMERIC(20,2) NOT NULL,
+  CONSTRAINT accpk PRIMARY KEY (RobberId, BankName, City, RobberyDate),
+  CONSTRAINT accfk FOREIGN KEY (BankName, City) REFERENCES banks(BankName, City) ON DELETE CASCADE,
+  CONSTRAINT accfkrobber FOREIGN KEY (RobberId) REFERENCES robbers(RobberId) ON DELETE CASCADE,
+  CONSTRAINT accfkrobbery FOREIGN KEY (BankName, City, RobberyDate) REFERENCES robberies(BankName, City, Date) ON DELETE CASCADE
+);
+
+\copy banks from banks_14.data
+\copy robberies from robberies_14.data
+\copy plans from plans_14.data
+
+
+
+##################
+Load in robbers
+##################
+
+CREATE TABLE temprobbers (
   Nickname CHAR(128) NOT NULL,
   Age INT NOT NULL,
   NoYears INT NOT NULL CONSTRAINT prisonyears CHECK(NoYears < Age AND NoYears >= 0)
 );
 
+-> CREATE TABLE
+
+\copy temprobbers robbers_14.data
+
+INSERT INTO robbers (
+  SELECT nextval('robbers_robberid_seq'), * FROM temprobbers
+);
+
+-> INSERT 0 24
+
+DROP TABLE temprobbers;
+
+(Robbers table populated)
+
+
+===================
+Loading in skills
+===================
+
+CREATE TABLE tempskills (
+  Nickname CHAR(64) NOT NULL,
+  Skillname CHAR(32) NOT NULL,
+  Preference INT NOT NULL,
+  Grade CHAR(2) NOT NULL
+);
+
+CREATE VIEW distinctskills AS SELECT DISTINCT Skillname FROM tempskills;
+
+INSERT INTO skills (
+  SELECT nextval('skills_skillid_seq'), Skillname FROM distinctskills
+);
+
+DROP VIEW distinctskills;
+
+-> INSERT 0 12
+
+(Skills populated with distinct skills)
+
+INSERT INTO hasskills (
+  SELECT r.robberid, s.skillid, t.preference, t.grade FROM robbers r, skills s, tempskills t
+  WHERE t.nickname = r.nickname AND t.skillname = s.description
+);
+
+-> INSERT 0 38
+(Has skills populated with robber ids/skill ids)
+
+DROP TABLE tempskills;
+
+=========================================
+Load has accounts
+=========================================
+
+CREATE TABLE tempaccounts (
+  Nickname CHAR(64) NOT NULL,
+  Bank CHAR(32) NOT NULL,
+  City CHAR(32) NOT NULL
+);
+
+\copy tempaccounts from hasaccounts_14.data
+
+INSERT INTO hasaccounts (
+  SELECT r.robberid, t.bank, t.city FROM robbers r, tempaccounts t
+  WHERE t.nickname = r.nickname
+);
+
+-> INSERT 0 31
+
+DROP TABLE tempaccounts;
+
+========================================
+Load accomplices
+========================================
+
+CREATE TABLE tempaccomplices (
+  Nickname CHAR(64) NOT NULL,
+  Bankname CHAR(32) NOT NULL,
+  City CHAR(32) NOT NULL,
+  RobberyDate DATE NOT NULL,
+  Share NUMERIC(20,2) NOT NULL
+);
+
+\copy tempaccomplices from accomplices_14.data
+
+INSERT INTO accomplices (
+  SELECT r.robberid, t.bankname, t.city, t.robberydate, t.share FROM robbers r, tempaccomplices t WHERE t.nickname = r.nickname
+);
+
+-> Insert 0 76
+(Had to add a line to robberies file because it was missing a robbery.)
+
+DROP TABLE tempaccomplices;
