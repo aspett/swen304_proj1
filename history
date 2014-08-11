@@ -1,0 +1,35 @@
+> createdb copsandrobbers
+
+REVOKE CONNECT ON DATABASE copsandrobbers FROM PUBLIC
+
+CREATE TABLE BANKS (
+  BankName CHAR(128) NOT NULL,
+  City CHAR(128) NOT NULL,
+  NoAccounts INT NOT NULL DEFAULT 0,
+  Security CHAR(12) NOT NULL,
+  CONSTRAINT bpk PRIMARY KEY (BankName, City)
+);
+
+CREATE TABLE ROBBERIES (
+  BankName CHAR(128) NOT NULL,
+  City CHAR(128) NOT NULL,
+  Date DATE NOT NULL,
+  Amount NUMERIC(6, 2) NOT NULL,
+  CONSTRAINT rbpk PRIMARY KEY (BankName, City)
+);
+
+CREATE TABLE PLANS (
+  BankName CHAR(128) NOT NULL,
+  City CHAR(128) NOT NULL,
+  NoRobbers INT NOT NULL DEFAULT 0,
+  PlannedDate DATE NOT NULL,
+  CONSTRAINT ppk PRIMARY KEY (BankName, City, PlannedDate)
+);
+
+CREATE TABLE ROBBERS (
+  RobberId INT PRIMARY KEY,
+  Nickname CHAR(128) NOT NULL,
+  Age INT NOT NULL,
+  NoYears INT NOT NULL CONSTRAINT prisonyears CHECK(NoYears < Age AND NoYears >= 0)
+);
+
